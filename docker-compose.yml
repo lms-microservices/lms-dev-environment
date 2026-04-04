@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+
+  # ── DATABASE ──────────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: lms-postgres
+    environment:
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_pass
+      POSTGRES_DB: lms_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API GATEWAY ───────────────────────────────────────────
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: lms-api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - user-service
+      - course-service
+      - enrollment-service
+      - notification-service
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      COURSE_SERVICE_URL: http://course-service:8083
+      ENROLLMENT_SERVICE_URL: http://enrollment-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+    networks:
+      - lms-network
+
+  # ── AUTH SERVICE ──────────────────────────────────────────
+  auth-service:
+    build: ./services/auth-service
+    container_name: lms-auth-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
+      SPRING_DATASOURCE_USERNAME: lms_user
+      SPRING_DATASOURCE_PASSWORD: lms_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JWT_SECRET: lms_super_secret_jwt_key_change_this_in_production
+      SERVER_PORT: 8081
+    networks:
+      - lms-network
+
+  # ── USER SERVICE ──────────────────────────────────────────
+  user-service:
+    build: ./services/user-service
+    container_name: lms-user-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
+      SPRING_DATASOURCE_USERNAME: lms_user
+      SPRING_DATASOURCE_PASSWORD: lms_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SERVER_PORT: 8082
+    networks:
+      - lms-network
+
+  # ── COURSE SERVICE ────────────────────────────────────────
+  course-service:
+    build: ./services/course-service
+    container_name: lms-course-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
+      SPRING_DATASOURCE_USERNAME: lms_user
+      SPRING_DATASOURCE_PASSWORD: lms_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SERVER_PORT: 8083
+    networks:
+      - lms-network
+
+  # ── ENROLLMENT SERVICE ────────────────────────────────────
+  enrollment-service:
+    build: ./services/enrollment-service
+    container_name: lms-enrollment-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
+      SPRING_DATASOURCE_USERNAME: lms_user
+      SPRING_DATASOURCE_PASSWORD: lms_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SERVER_PORT: 8084
+    networks:
+      - lms-network
+
+  # ── NOTIFICATION SERVICE ──────────────────────────────────
+  notification-service:
+    build: ./services/notification-service
+    container_name: lms-notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+    networks:
+      - lms-network
+
+  # ── FRONTEND ──────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: lms-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+    networks:
+      - lms-network
+
+# ── VOLUMES & NETWORKS ────────────────────────────────────
+volumes:
+  postgres_data:
+
+networks:
+  lms-network:
+    driver: bridge

@@ -1,0 +1,31 @@
+# ── Java / Spring Boot ──
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/
+
+# ── IntelliJ IDEA ──
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# ── VS Code ──
+.vscode/
+
+# ── Node / React ──
+node_modules/
+build/
+dist/
+.env
+.env.local
+.env.production
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Docker ──
+*.log
