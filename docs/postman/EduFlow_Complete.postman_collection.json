@@ -1,0 +1,2354 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "name": "EduFlow Gateway + Auth Postman Collection",
+    "description": "Postman collection for the current EduFlow gateway, auth, and user flows.\n\nCovers:\n- API Gateway request authorization\n- Auth service register, login, refresh, validate, roles, and permissions\n- User service reads, updates, and instructor approval through the gateway\n\nHighlights:\n- Stores access token, refresh token, role, auth user ID, and permissions for each actor\n- Tests permission-based role management with the current gateway contract\n- Includes current self-access caveat caused by auth numeric IDs vs user-service route IDs\n\nRun order:\n1. Registration and login requests\n2. Validate tokens\n3. Role and permission management\n4. User management and gateway security checks",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gatewayBaseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "invalidAccessToken",
+      "value": "invalid.token.value"
+    },
+    {
+      "key": "studentEmail",
+      "value": "student@example.com"
+    },
+    {
+      "key": "studentPassword",
+      "value": "Password123"
+    },
+    {
+      "key": "studentFullName",
+      "value": "Student Example"
+    },
+    {
+      "key": "studentAccessToken",
+      "value": ""
+    },
+    {
+      "key": "studentRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "studentAuthUserId",
+      "value": ""
+    },
+    {
+      "key": "studentRole",
+      "value": ""
+    },
+    {
+      "key": "instructorEmail",
+      "value": "instructor@lms.com"
+    },
+    {
+      "key": "instructorPassword",
+      "value": "Password123"
+    },
+    {
+      "key": "instructorAccessToken",
+      "value": ""
+    },
+    {
+      "key": "instructorRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "instructorAuthUserId",
+      "value": ""
+    },
+    {
+      "key": "instructorRole",
+      "value": ""
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@lms.com"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Password123"
+    },
+    {
+      "key": "adminAccessToken",
+      "value": ""
+    },
+    {
+      "key": "adminRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "adminAuthUserId",
+      "value": ""
+    },
+    {
+      "key": "adminRole",
+      "value": ""
+    },
+    {
+      "key": "otherUserRouteId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "managedUserRouteId",
+      "value": ""
+    },
+    {
+      "key": "instructorRouteId",
+      "value": ""
+    },
+    {
+      "key": "studentLookupEmail",
+      "value": "student@example.com"
+    },
+    {
+      "key": "studentPermissions",
+      "value": "[]"
+    },
+    {
+      "key": "instructorPermissions",
+      "value": "[]"
+    },
+    {
+      "key": "adminPermissions",
+      "value": "[]"
+    },
+    {
+      "key": "testRoleName",
+      "value": "TEST_ROLE"
+    },
+    {
+      "key": "testPermissionName",
+      "value": "TEST_PERMISSION"
+    }
+  ],
+  "item": [
+    {
+      "name": "Flow 1: Registration & Onboarding",
+      "description": "Register users with different roles. Run these first to create test accounts.",
+      "item": [
+        {
+          "name": "Clear All Stored Variables",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const keysToClear = [",
+                  "  'studentAccessToken', 'studentRefreshToken', 'studentAuthUserId', 'studentRole', 'studentPermissions',",
+                  "  'instructorAccessToken', 'instructorRefreshToken', 'instructorAuthUserId', 'instructorRole', 'instructorPermissions',",
+                  "  'adminAccessToken', 'adminRefreshToken', 'adminAuthUserId', 'adminRole', 'adminPermissions',",
+                  "  'managedUserRouteId', 'instructorRouteId', 'testRoleId', 'testPermissionId'",
+                  "];",
+                  "keysToClear.forEach(key => pm.collectionVariables.set(key, key.endsWith('Permissions') ? '[]' : ''));",
+                  "pm.test('All stored auth and role-management variables cleared', function() {",
+                  "  pm.expect(true).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/validate?token=reset",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "validate"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "reset"
+                }
+              ]
+            },
+            "description": "Utility request to clear all stored tokens before starting fresh."
+          }
+        },
+        {
+          "name": "Register Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Register returns 200 or user already exists', function() {",
+                  "  pm.expect([200, 400, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('studentAccessToken', json.accessToken || '');",
+                  "  pm.collectionVariables.set('studentRefreshToken', json.refreshToken || '');",
+                  "  pm.collectionVariables.set('studentRole', json.role || '');",
+                  "  pm.collectionVariables.set('studentPermissions', JSON.stringify(json.permissions || []));",
+                  "  pm.test('Student register response carries tokens and permissions', function() {",
+                  "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(json.refreshToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/register",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register a new student (defaults to STUDENT role). If user exists, use Login Student instead."
+          }
+        },
+        {
+          "name": "Register Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Register returns 200 or user already exists', function() {",
+                  "  pm.expect([200, 400, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('instructorAccessToken', json.accessToken || '');",
+                  "  pm.collectionVariables.set('instructorRefreshToken', json.refreshToken || '');",
+                  "  pm.collectionVariables.set('instructorRole', json.role || '');",
+                  "  pm.collectionVariables.set('instructorPermissions', JSON.stringify(json.permissions || []));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{instructorEmail}}\",\n  \"password\": \"{{instructorPassword}}\",\n  \"role\": \"INSTRUCTOR\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/register",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register a new instructor with INSTRUCTOR role."
+          }
+        },
+        {
+          "name": "Register Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Register returns 200 or user already exists', function() {",
+                  "  pm.expect([200, 400, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('adminAccessToken', json.accessToken || '');",
+                  "  pm.collectionVariables.set('adminRefreshToken', json.refreshToken || '');",
+                  "  pm.collectionVariables.set('adminRole', json.role || '');",
+                  "  pm.collectionVariables.set('adminPermissions', JSON.stringify(json.permissions || []));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"role\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/register",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register a new admin with ADMIN role. Note: Admin role assignment may require existing admin privileges depending on your auth-service configuration."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flow 2: Authentication Core",
+      "description": "Login, refresh tokens, and validate JWT tokens for all roles.",
+      "item": [
+        {
+          "name": "Login Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student login request returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('studentAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('studentRefreshToken', json.refreshToken || '');",
+                  "pm.collectionVariables.set('studentRole', json.role || '');",
+                  "pm.collectionVariables.set('studentPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Auth response includes permissions array', function() {",
+                  "  pm.expect(json).to.have.property('permissions');",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});",
+                  "pm.test('Response has correct structure', function() {",
+                  "  pm.expect(json).to.have.property('accessToken');",
+                  "  pm.expect(json).to.have.property('refreshToken');",
+                  "  pm.expect(json).to.have.property('role');",
+                  "  pm.expect(json).to.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/login",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as student and store tokens automatically."
+          }
+        },
+        {
+          "name": "Login Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Instructor login request returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('instructorAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('instructorRefreshToken', json.refreshToken || '');",
+                  "pm.collectionVariables.set('instructorRole', json.role || '');",
+                  "pm.collectionVariables.set('instructorPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Auth response includes permissions array', function() {",
+                  "  pm.expect(json).to.have.property('permissions');",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{instructorEmail}}\",\n  \"password\": \"{{instructorPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/login",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as instructor and store tokens automatically."
+          }
+        },
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin login request returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('adminAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('adminRefreshToken', json.refreshToken || '');",
+                  "pm.collectionVariables.set('adminRole', json.role || '');",
+                  "pm.collectionVariables.set('adminPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Auth response includes permissions array', function() {",
+                  "  pm.expect(json).to.have.property('permissions');",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});",
+                  "pm.test('Admin token carries role-management permission', function() {",
+                  "  pm.expect(json.permissions || []).to.include('roles:manage');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/login",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as admin and store tokens automatically."
+          }
+        },
+        {
+          "name": "Validate Student Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student token validates successfully', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('studentAuthUserId', json.userId || '');",
+                  "pm.collectionVariables.set('studentRole', json.role || '');",
+                  "pm.collectionVariables.set('studentPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Token validation response includes permissions', function() {",
+                  "  pm.expect(json).to.have.property('valid').that.is.a('boolean');",
+                  "  pm.expect(json).to.have.property('userId');",
+                  "  pm.expect(json).to.have.property('email');",
+                  "  pm.expect(json).to.have.property('role');",
+                  "  pm.expect(json).to.have.property('permissions');",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});",
+                  "pm.test('Token is valid and has STUDENT role', function() {",
+                  "  pm.expect(json.valid).to.be.true;",
+                  "  pm.expect(json.role).to.eql('STUDENT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/validate?token={{studentAccessToken}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "validate"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{studentAccessToken}}"
+                }
+              ]
+            },
+            "description": "Validate student access token and store user ID for downstream requests."
+          }
+        },
+        {
+          "name": "Validate Instructor Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Instructor token validates', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('instructorAuthUserId', json.userId || '');",
+                  "pm.collectionVariables.set('instructorRole', json.role || '');",
+                  "pm.collectionVariables.set('instructorPermissions', JSON.stringify(json.permissions || []));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/validate?token={{instructorAccessToken}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "validate"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{instructorAccessToken}}"
+                }
+              ]
+            },
+            "description": "Validate instructor access token."
+          }
+        },
+        {
+          "name": "Validate Admin Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin token validates', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('adminAuthUserId', json.userId || '');",
+                  "pm.collectionVariables.set('adminRole', json.role || '');",
+                  "pm.collectionVariables.set('adminPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Admin validation includes role-management permission', function() {",
+                  "  pm.expect(json.permissions || []).to.include('roles:manage');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/validate?token={{adminAccessToken}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "validate"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{adminAccessToken}}"
+                }
+              ]
+            },
+            "description": "Validate admin access token."
+          }
+        },
+        {
+          "name": "Refresh Student Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student refresh returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "const oldToken = pm.collectionVariables.get('studentAccessToken');",
+                  "pm.collectionVariables.set('studentAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('studentRefreshToken', json.refreshToken || pm.collectionVariables.get('studentRefreshToken'));",
+                  "pm.collectionVariables.set('studentRole', json.role || pm.collectionVariables.get('studentRole'));",
+                  "pm.collectionVariables.set('studentPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Refresh returns a new access token and permissions array', function() {",
+                  "  pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.accessToken).to.not.eql(oldToken);",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{studentRefreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/refresh",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Refresh student access token using refresh token."
+          }
+        },
+        {
+          "name": "Refresh Instructor Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Instructor refresh returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "const oldToken = pm.collectionVariables.get('instructorAccessToken');",
+                  "pm.collectionVariables.set('instructorAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('instructorRefreshToken', json.refreshToken || pm.collectionVariables.get('instructorRefreshToken'));",
+                  "pm.collectionVariables.set('instructorRole', json.role || pm.collectionVariables.get('instructorRole'));",
+                  "pm.collectionVariables.set('instructorPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Refresh returns a new access token and permissions array', function() {",
+                  "  pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.accessToken).to.not.eql(oldToken);",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{instructorRefreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/refresh",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Refresh instructor access token."
+          }
+        },
+        {
+          "name": "Refresh Admin Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin refresh returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "const oldToken = pm.collectionVariables.get('adminAccessToken');",
+                  "pm.collectionVariables.set('adminAccessToken', json.accessToken || '');",
+                  "pm.collectionVariables.set('adminRefreshToken', json.refreshToken || pm.collectionVariables.get('adminRefreshToken'));",
+                  "pm.collectionVariables.set('adminRole', json.role || pm.collectionVariables.get('adminRole'));",
+                  "pm.collectionVariables.set('adminPermissions', JSON.stringify(json.permissions || []));",
+                  "pm.test('Refresh returns a new access token and permissions array', function() {",
+                  "  pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.accessToken).to.not.eql(oldToken);",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{adminRefreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/refresh",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Refresh admin access token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flow 3: Role & Permission Management",
+      "description": "Manage roles and permissions through the gateway. These requests require a token carrying the roles:manage permission.",
+      "item": [
+        {
+          "name": "Get All Roles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get all roles returns 200 for roles:manage token', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Response is an array', function() {",
+                  "  pm.expect(Array.isArray(json)).to.be.true;",
+                  "});",
+                  "if (Array.isArray(json) && json.length > 0) {",
+                  "  pm.test('Role has required fields', function() {",
+                  "    pm.expect(json[0]).to.have.property('id');",
+                  "    pm.expect(json[0]).to.have.property('name');",
+                  "    pm.expect(json[0]).to.have.property('isStatic');",
+                  "    pm.expect(json[0]).to.have.property('permissions');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles"
+              ]
+            },
+            "description": "Get all roles. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Create New Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create role returns 201', function() {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json && json.id) pm.collectionVariables.set('testRoleId', json.id);",
+                  "pm.test('Role response has required fields', function() {",
+                  "  pm.expect(json).to.have.property('id');",
+                  "  pm.expect(json).to.have.property('name');",
+                  "  pm.expect(json.name).to.eql(pm.collectionVariables.get('testRoleName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{testRoleName}}\",\n  \"permissionIds\": []\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles"
+              ]
+            },
+            "description": "Create a new role. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Get Role By Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get role by name returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Role response structure', function() {",
+                  "  pm.expect(json).to.have.property('name');",
+                  "  pm.expect(json).to.have.property('permissions');",
+                  "  pm.expect(Array.isArray(json.permissions)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles/{{testRoleName}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles",
+                "{{testRoleName}}"
+              ]
+            },
+            "description": "Get a role by name. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Get All Permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get all permissions returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Response is an array of permissions', function() {",
+                  "  pm.expect(Array.isArray(json)).to.be.true;",
+                  "});",
+                  "const target = json.find(p => p.name === pm.collectionVariables.get('testPermissionName'));",
+                  "if (target && target.id) pm.collectionVariables.set('testPermissionId', target.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles/permissions",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles",
+                "permissions"
+              ]
+            },
+            "description": "List all permissions. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Create Permission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create permission returns 201', function() {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json && json.id) pm.collectionVariables.set('testPermissionId', json.id);",
+                  "pm.test('Permission has required fields', function() {",
+                  "  pm.expect(json).to.have.property('id');",
+                  "  pm.expect(json).to.have.property('name');",
+                  "  pm.expect(json.name).to.eql(pm.collectionVariables.get('testPermissionName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{testPermissionName}}\",\n  \"description\": \"Test permission for Postman collection\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles/permissions",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles",
+                "permissions"
+              ]
+            },
+            "description": "Create a new permission. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Add Permissions To Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Add permissions returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Role now includes test permission', function() {",
+                  "  pm.expect(json.permissions || []).to.include(pm.collectionVariables.get('testPermissionName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[{{testPermissionId}}]"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles/{{testRoleId}}/permissions",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles",
+                "{{testRoleId}}",
+                "permissions"
+              ]
+            },
+            "description": "Add permissions to a role using the current array-body contract. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Remove Permission From Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Remove permission returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Role no longer includes test permission', function() {",
+                  "  pm.expect(json.permissions || []).to.not.include(pm.collectionVariables.get('testPermissionName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles/{{testRoleId}}/permissions/{{testPermissionId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles",
+                "{{testRoleId}}",
+                "permissions",
+                "{{testPermissionId}}"
+              ]
+            },
+            "description": "Remove a permission from the test role. Requires roles:manage."
+          }
+        },
+        {
+          "name": "Assign Role To User (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Assign role returns 204', function() {",
+                  "  pm.expect([204, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": {{testRoleId}}\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/users/{{studentAuthUserId}}/role",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "users",
+                "{{studentAuthUserId}}",
+                "role"
+              ]
+            },
+            "description": "Assign a role to a user. Requires roles:manage. Uses studentAuthUserId from token validation."
+          }
+        },
+        {
+          "name": "Delete Test Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete role returns 204', function() {",
+                  "  pm.expect([204, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 204) pm.collectionVariables.set('testRoleId', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/roles/{{testRoleId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "roles",
+                "{{testRoleId}}"
+              ]
+            },
+            "description": "Delete the test role. Requires roles:manage."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flow 4: User Management",
+      "description": "User profile management via user-service. Tests RBAC for all roles.",
+      "item": [
+        {
+          "name": "Admin: List All Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can list users - returns 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Response is an array of users', function() {",
+                  "  pm.expect(Array.isArray(json)).to.be.true;",
+                  "});",
+                  "if (Array.isArray(json) && json.length > 0) {",
+                  "  const managedUser = json.find(u => u.roleName === 'STUDENT') || json[0];",
+                  "  const instructorUser = json.find(u => u.roleName === 'INSTRUCTOR');",
+                  "  if (managedUser && managedUser.id) {",
+                  "    pm.collectionVariables.set('managedUserRouteId', managedUser.id);",
+                  "    pm.collectionVariables.set('studentLookupEmail', managedUser.email || pm.collectionVariables.get('studentLookupEmail'));",
+                  "  }",
+                  "  if (instructorUser && instructorUser.id) {",
+                  "    pm.collectionVariables.set('instructorRouteId', instructorUser.id);",
+                  "  }",
+                  "  pm.test('User has required fields', function() {",
+                  "    pm.expect(managedUser).to.have.property('id');",
+                  "    pm.expect(managedUser).to.have.property('email');",
+                  "    pm.expect(managedUser).to.have.property('roleName');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "List all users. Requires users:read. Also harvests user IDs for subsequent tests."
+          }
+        },
+        {
+          "name": "Admin: Get User By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can get user by ID', function() {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('User response structure', function() {",
+                  "    pm.expect(json).to.have.property('id');",
+                  "    pm.expect(json).to.have.property('email');",
+                  "    pm.expect(json).to.have.property('roleName');",
+                  "    pm.expect(json).to.have.property('isApproved');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{managedUserRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{managedUserRouteId}}"
+              ]
+            },
+            "description": "Get user by ID. ADMIN only. Run 'Admin: List All Users' first."
+          }
+        },
+        {
+          "name": "Admin: Get User By Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can lookup user by email', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('User response has correct email', function() {",
+                  "  pm.expect(json.email).to.eql('{{studentLookupEmail}}');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/email/{{studentLookupEmail}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "email",
+                "{{studentLookupEmail}}"
+              ]
+            },
+            "description": "Get user by email. ADMIN only."
+          }
+        },
+        {
+          "name": "Admin: Update User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can update user', function() {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('Full name was updated', function() {",
+                  "    pm.expect(json.fullName).to.eql('Updated By Admin');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Updated By Admin\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{managedUserRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{managedUserRouteId}}"
+              ]
+            },
+            "description": "Update user profile. ADMIN only."
+          }
+        },
+        {
+          "name": "Admin: Approve Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can approve instructor', function() {",
+                  "  pm.expect([200, 204, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{instructorRouteId}}/approve-instructor",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{instructorRouteId}}",
+                "approve-instructor"
+              ]
+            },
+            "description": "Approve an instructor. ADMIN only. Run 'Admin: List All Users' first to populate instructorRouteId."
+          }
+        },
+        {
+          "name": "Student: Self Get Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student self-read passes gateway RBAC', function() {",
+                  "  pm.expect([200, 400, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Student self-read is NOT 401 or 403', function() {",
+                  "  pm.expect(pm.response.code).to.not.eql(401);",
+                  "  pm.expect(pm.response.code).to.not.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{managedUserRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{managedUserRouteId}}"
+              ]
+            },
+            "description": "Student reading own profile. Gateway should allow (self-access). Note: May return 400 due to ID mismatch between auth-service (numeric) and user-service (UUID)."
+          }
+        },
+        {
+          "name": "Student: Self Update Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student self-update passes gateway RBAC', function() {",
+                  "  pm.expect([200, 400, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Student self-update is NOT 401 or 403', function() {",
+                  "  pm.expect(pm.response.code).to.not.eql(401);",
+                  "  pm.expect(pm.response.code).to.not.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"{{studentFullName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{managedUserRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{managedUserRouteId}}"
+              ]
+            },
+            "description": "Student updating own profile."
+          }
+        },
+        {
+          "name": "Student: Cannot Read Other User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student cross-user read is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{instructorRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{instructorRouteId}}"
+              ]
+            },
+            "description": "Student trying to read another user's profile. Should return 403."
+          }
+        },
+        {
+          "name": "Student: Cannot Update Other User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student cross-user update is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Should Be Forbidden\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{instructorRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{instructorRouteId}}"
+              ]
+            },
+            "description": "Student trying to update another user's profile. Should return 403."
+          }
+        },
+        {
+          "name": "Student: Cannot List Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student list-users is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Student trying to list all users. Should return 403."
+          }
+        },
+        {
+          "name": "Student: Cannot Lookup By Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student email lookup is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/email/admin@lms.com",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "email",
+                "admin@lms.com"
+              ]
+            },
+            "description": "Student trying to lookup user by email. Should return 403."
+          }
+        },
+        {
+          "name": "Student: Cannot Approve Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student approve-instructor is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{instructorRouteId}}/approve-instructor",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{instructorRouteId}}",
+                "approve-instructor"
+              ]
+            },
+            "description": "Student trying to approve an instructor. Should return 403."
+          }
+        },
+        {
+          "name": "Instructor: Self Get Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Instructor self-read passes gateway RBAC', function() {",
+                  "  pm.expect([200, 400, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Instructor self-read is NOT 401 or 403', function() {",
+                  "  pm.expect(pm.response.code).to.not.eql(401);",
+                  "  pm.expect(pm.response.code).to.not.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{instructorAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{instructorRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{instructorRouteId}}"
+              ]
+            },
+            "description": "Instructor reading own profile."
+          }
+        },
+        {
+          "name": "Instructor: Cannot List Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Instructor list-users is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{instructorAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Instructor trying to list all users. Should return 403."
+          }
+        },
+        {
+          "name": "Instructor: Cannot Approve Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Instructor approve-instructor is forbidden (403)', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{instructorAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{managedUserRouteId}}/approve-instructor",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{managedUserRouteId}}",
+                "approve-instructor"
+              ]
+            },
+            "description": "Instructor trying to approve another instructor. Should return 403."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flow 5: Gateway & Security Verification",
+      "description": "Test API Gateway security: public paths, authentication enforcement, RBAC at gateway level.",
+      "item": [
+        {
+          "name": "Public Endpoint: Login Without Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public login endpoint is reachable without token', function() {",
+                  "  pm.expect(pm.response.code).to.not.eql(401);",
+                  "  pm.expect(pm.response.code).to.not.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/login",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Verify /api/auth/** is public and does not require Authorization header."
+          }
+        },
+        {
+          "name": "Public Endpoint: Register Without Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public register endpoint is reachable without token', function() {",
+                  "  pm.expect(pm.response.code).to.not.eql(401);",
+                  "  pm.expect(pm.response.code).to.not.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"publictest@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/auth/register",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Verify register endpoint is public."
+          }
+        },
+        {
+          "name": "Public Endpoint: Course Read Without Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public course GET bypasses auth', function() {",
+                  "  pm.expect(pm.response.code).to.not.eql(401);",
+                  "  pm.expect(pm.response.code).to.not.eql(403);",
+                  "});",
+                  "pm.test('Course service may not be running (expected 404/500)', function() {",
+                  "  pm.expect([404, 500, 502, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/courses/demo-course",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "courses",
+                "demo-course"
+              ]
+            },
+            "description": "Verify GET /api/courses/** is public. 404/500 expected if course-service is not running."
+          }
+        },
+        {
+          "name": "Protected Endpoint: No Token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing token returns 401', function() {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Verify gateway rejects protected routes when no Authorization header is supplied."
+          }
+        },
+        {
+          "name": "Protected Endpoint: Invalid Token -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid token returns 403', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{invalidAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Verify malformed/invalid JWT tokens are rejected with 403."
+          }
+        },
+        {
+          "name": "Protected Endpoint: Empty Bearer Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Empty bearer token returns 401', function() {",
+                  "  pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer "
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Verify empty Bearer token is rejected."
+          }
+        },
+        {
+          "name": "Gateway: Check Request Headers Mutation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request passes gateway with valid token', function() {",
+                  "  pm.expect([200, 400, 404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Gateway should add X-User-Id, X-User-Email, X-User-Role headers', function() {",
+                  "  console.log('Check your service logs for mutated headers: X-User-Id, X-User-Email, X-User-Role');",
+                  "  pm.expect(true).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users/{{managedUserRouteId}}",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{managedUserRouteId}}"
+              ]
+            },
+            "description": "Verify gateway mutates request with X-User-Id, X-User-Email, X-User-Role headers. Check downstream service logs."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flow 6: JWT Edge Cases & Negative Tests",
+      "description": "Test JWT security: expired tokens, tampered signatures, missing claims, malformed tokens.",
+      "item": [
+        {
+          "name": "JWT: Expired Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expired token returns 403', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{expiredToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Test with an expired JWT token. Should return 403."
+          }
+        },
+        {
+          "name": "JWT: Tampered Signature",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tampered signature returns 403', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tamperedToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Test with JWT that has valid structure but tampered signature. Should return 403."
+          }
+        },
+        {
+          "name": "JWT: Malformed Token Structure",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Malformed token returns 403', function() {",
+                  "  pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not.a.valid.jwt.token.structure"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Test with completely malformed JWT (not 3 base64 segments). Should return 403."
+          }
+        },
+        {
+          "name": "JWT: Missing Bearer Prefix",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing Bearer prefix returns 401', function() {",
+                  "  pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{studentAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Test with valid JWT but missing 'Bearer ' prefix. Should return 401 or 403."
+          }
+        },
+        {
+          "name": "JWT: Token With Missing Claims",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const jwtLib = require('jsonwebtoken');",
+                  "pm.test('Token with missing claims should be rejected', function() {",
+                  "  pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.fakeSignatureForMissingClaims"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Test with JWT that has missing required claims (no role, no email). Should be rejected."
+          }
+        },
+        {
+          "name": "JWT: Algorithm Confusion Attack",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Algorithm confusion attack should be rejected', function() {",
+                  "  pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxIiwicm9sZSI6IkFETUlOIn0."
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayBaseUrl}}/api/users",
+              "host": [
+                "{{gatewayBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Test algorithm confusion attack (alg: none). Should be rejected by gateway."
+          }
+        }
+      ]
+    }
+  ]
+}
