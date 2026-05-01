@@ -1,149 +1,189 @@
-version: '3.8'
-
-services:
-
-  # ── DATABASE ──────────────────────────────────────────────
-  postgres:
-    image: postgres:15
-    container_name: lms-postgres
-    environment:
-      POSTGRES_USER: lms_user
-      POSTGRES_PASSWORD: lms_pass
-      POSTGRES_DB: lms_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - lms-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ── API GATEWAY ───────────────────────────────────────────
-  api-gateway:
-    build: ./services/api-gateway
-    container_name: lms-api-gateway
-    ports:
-      - "8080:8080"
-    depends_on:
-      - auth-service
-      - user-service
-      - course-service
-      - enrollment-service
-      - notification-service
-    environment:
-      AUTH_SERVICE_URL: http://auth-service:8081
-      USER_SERVICE_URL: http://user-service:8082
-      COURSE_SERVICE_URL: http://course-service:8083
-      ENROLLMENT_SERVICE_URL: http://enrollment-service:8084
-      NOTIFICATION_SERVICE_URL: http://notification-service:8085
-    networks:
-      - lms-network
-
-  # ── AUTH SERVICE ──────────────────────────────────────────
-  auth-service:
-    build: ./services/auth-service
-    container_name: lms-auth-service
-    ports:
-      - "8081:8081"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
-      SPRING_DATASOURCE_USERNAME: lms_user
-      SPRING_DATASOURCE_PASSWORD: lms_pass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      JWT_SECRET: lms_super_secret_jwt_key_change_this_in_production
-      SERVER_PORT: 8081
-    networks:
-      - lms-network
-
-  # ── USER SERVICE ──────────────────────────────────────────
-  user-service:
-    build: ./services/user-service
-    container_name: lms-user-service
-    ports:
-      - "8082:8082"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
-      SPRING_DATASOURCE_USERNAME: lms_user
-      SPRING_DATASOURCE_PASSWORD: lms_pass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SERVER_PORT: 8082
-    networks:
-      - lms-network
-
-  # ── COURSE SERVICE ────────────────────────────────────────
-  course-service:
-    build: ./services/course-service
-    container_name: lms-course-service
-    ports:
-      - "8083:8083"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
-      SPRING_DATASOURCE_USERNAME: lms_user
-      SPRING_DATASOURCE_PASSWORD: lms_pass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SERVER_PORT: 8083
-    networks:
-      - lms-network
-
-  # ── ENROLLMENT SERVICE ────────────────────────────────────
-  enrollment-service:
-    build: ./services/enrollment-service
-    container_name: lms-enrollment-service
-    ports:
-      - "8084:8084"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lms_db
-      SPRING_DATASOURCE_USERNAME: lms_user
-      SPRING_DATASOURCE_PASSWORD: lms_pass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SERVER_PORT: 8084
-    networks:
-      - lms-network
-
-  # ── NOTIFICATION SERVICE ──────────────────────────────────
-  notification-service:
-    build: ./services/notification-service
-    container_name: lms-notification-service
-    ports:
-      - "8085:8085"
-    environment:
-      SERVER_PORT: 8085
-    networks:
-      - lms-network
-
-  # ── FRONTEND ──────────────────────────────────────────────
-  frontend:
-    build: ./frontend
-    container_name: lms-frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api-gateway
-    environment:
-      REACT_APP_API_URL: http://localhost:8080
-    networks:
-      - lms-network
-
-# ── VOLUMES & NETWORKS ────────────────────────────────────
-volumes:
-  postgres_data:
+name: lms-platform
 
 networks:
   lms-network:
     driver: bridge
+
+volumes:
+  shared-db-data:
+  course-db-data:
+  notification-db-data:
+
+services:
+  service-registry:
+    build:
+      context: ./service-registry
+      dockerfile: Dockerfile
+    container_name: service-registry
+    ports:
+      - "8761:8761"
+    networks:
+      - lms-network
+
+  shared-db:
+    image: postgres:15-alpine
+    container_name: shared-db
+    environment:
+      POSTGRES_DB: lms_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - shared-db-data:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d lms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  course-db:
+    image: postgres:15-alpine
+    container_name: course-db
+    environment:
+      POSTGRES_DB: course_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - course-db-data:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d course_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://shared-db:5432/lms_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-supersecretkey-supersecretkey-2026}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
+    depends_on:
+      service-registry:
+        condition: service_started
+      shared-db:
+        condition: service_healthy
+    networks:
+      - lms-network
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://shared-db:5432/lms_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
+    depends_on:
+      service-registry:
+        condition: service_started
+      shared-db:
+        condition: service_healthy
+    networks:
+      - lms-network
+
+  course-service:
+    build:
+      context: ./course-service
+      dockerfile: Dockerfile
+    container_name: course-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://course-db:5432/course_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+    depends_on:
+      service-registry:
+        condition: service_started
+      course-db:
+        condition: service_healthy
+    networks:
+      - lms-network
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://notification-db:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
+      MAIL_HOST: ${MAIL_HOST:-smtp.example.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-demo}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-demo}
+    depends_on:
+      service-registry:
+        condition: service_started
+      notification-db:
+        condition: service_healthy
+    networks:
+      - lms-network
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET:-supersecretkey-supersecretkey-2026}
+    depends_on:
+      service-registry:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      course-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+    networks:
+      - lms-network
